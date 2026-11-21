@@ -1,0 +1,7 @@
+{
+  "port": 8788,
+  "autoCopyOnReceive": true,
+  "autoPasteAfterHotkey": true,
+  "keepHistory": 100,
+  "keywordPattern": "验证码|校验码|动态码|确认码|安全码|登录码|激活码|verification code|security code|one-time code|passcode|OTP|code"
+}

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>验证码助手</title>
+<style>
+  :root{
+    --bg:#0f1216; --panel:#171c23; --panel2:#1e242c; --line:#2a323c;
+    --text:#e8edf3; --muted:#8b97a5; --accent:#4ea1ff; --ok:#34c759; --warn:#ff9f0a;
+    --code:#7ee787;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.6}
+  .wrap{max-width:860px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:20px;margin:0 0 4px;font-weight:600;letter-spacing:.5px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:18px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px;
+    box-shadow:0 0 8px var(--ok);vertical-align:1px}
+  .dot.off{background:#ff453a;box-shadow:0 0 8px #ff453a}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+  .label{color:var(--muted);font-size:12px;letter-spacing:.5px;text-transform:uppercase}
+  .code{font:600 44px/1.2 "SF Mono",Consolas,"Courier New",monospace;letter-spacing:6px;color:var(--code);
+    margin:6px 0 2px;word-break:break-all}
+  .meta{color:var(--muted);font-size:12px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:9px;
+    padding:8px 14px;font-size:13px;cursor:pointer;transition:.15s}
+  button:hover{border-color:#3b4756;background:#232a33}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#06111f;font-weight:600}
+  button.primary:hover{background:#67b0ff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+  .kv{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .kv .k{color:var(--muted);font-size:11px}
+  .kv .v{font-size:13px;word-break:break-all}
+  .hist{list-style:none;padding:0;margin:0}
+  .hist li{padding:10px 0;border-bottom:1px dashed var(--line);display:flex;gap:12px;align-items:baseline}
+  .hist li:last-child{border-bottom:none}
+  .hist .t{color:var(--muted);font-size:12px;white-space:nowrap;min-width:120px}
+  .hist .c{font:600 16px monospace;color:var(--code);min-width:76px}
+  .hist .p{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .empty{color:var(--muted);text-align:center;padding:18px 0}
+  .hint{color:var(--muted);font-size:12px;margin-top:8px}
+  pre.raw{background:#0b0e12;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:12px;
+    color:#a8b3c0;white-space:pre-wrap;word-break:break-all;max-height:160px;overflow:auto;margin:8px 0 0}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;
+    background:#1f2a36;border:1px solid var(--line);border-radius:10px;padding:10px 18px;transition:.25s;
+    pointer-events:none;font-size:13px}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>验证码助手</h1>
+  <div class="sub"><span id="dot" class="dot off"></span><span id="statusText">连接中…</span></div>
+
+  <div class="card">
+    <div class="label">最新验证码</div>
+    <div class="code" id="code">------</div>
+    <div class="meta" id="codeMeta">还没有收到短信</div>
+    <div class="row" style="margin-top:14px">
+      <button class="primary" id="btnCopy">复制</button>
+      <button id="btnTest">发一条测试短信</button>
+    </div>
+    <div class="hint">收到短信后会自动复制到剪贴板，直接在网页里 Ctrl+V 即可。在任何窗口按 <b>Ctrl+Alt+V</b> 也能把最新验证码粘贴进去。</div>
+  </div>
+
+  <div class="card">
+    <div class="label">运行状态</div>
+    <div class="grid" style="margin-top:10px">
+      <div class="kv"><div class="k">监听端口</div><div class="v" id="vPort">-</div></div>
+      <div class="kv"><div class="k">本机地址</div><div class="v" id="vIps">-</div></div>
+      <div class="kv"><div class="k">收到短信</div><div class="v" id="vCount">-</div></div>
+      <div class="kv"><div class="k">自动复制</div><div class="v" id="vAuto">-</div></div>
+    </div>
+    <div class="label" style="margin-top:14px">最近收到的原始内容（手机配置不对时看这里）</div>
+    <pre class="raw" id="raw">-</pre>
+  </div>
+
+  <div class="card">
+    <div class="label">历史记录</div>
+    <ul class="hist" id="hist"><li class="empty">暂无记录</li></ul>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let latest = null;
+
+function showToast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+async function copyText(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    return true;
+  }catch(e){}
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){ return false; }
+}
+
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function refresh(){
+  try{
+    const st = await (await fetch('/api/status',{cache:'no-store'})).json();
+    $('dot').classList.remove('off');
+    $('statusText').textContent = '运行中 · 等待手机转发';
+    $('vPort').textContent = st.port;
+    $('vIps').textContent = (st.ips||[]).join(' / ') || '-';
+    $('vCount').textContent = st.count;
+    $('vAuto').textContent = st.autoCopy ? '开' : '关';
+    $('raw').textContent = st.lastRaw || '（还没收到任何请求）';
+  }catch(e){
+    $('dot').classList.add('off');
+    $('statusText').textContent = '连不上助手服务';
+  }
+
+  try{
+    const d = await (await fetch('/api/latest',{cache:'no-store'})).json();
+    if(d && !d.empty){
+      latest = d;
+      $('code').textContent = d.code || '未识别';
+      $('codeMeta').textContent = (d.time||'') + (d.from ? ' · 来自 ' + d.from : '') + ' · ' + (d.content||'').slice(0,60);
+    }
+  }catch(e){}
+
+  try{
+    const h = await (await fetch('/api/history',{cache:'no-store'})).json();
+    const items = h.items || [];
+    if(!items.length){ $('hist').innerHTML = '<li class="empty">暂无记录</li>'; return; }
+    $('hist').innerHTML = items.map(it =>
+      '<li><span class="t">'+esc(it.time)+'</span>'+
+      '<span class="c">'+esc(it.code||'—')+'</span>'+
+      '<span class="p">'+esc((it.from?it.from+' · ':'')+(it.content||''))+'</span></li>'
+    ).join('');
+  }catch(e){}
+}
+
+$('btnCopy').onclick = async () => {
+  if(!latest || !latest.code){ showToast('还没有验证码'); return; }
+  const ok = await copyText(latest.code);
+  showToast(ok ? '已复制 ' + latest.code : '复制失败，请手动选中');
+};
+
+$('btnTest').onclick = async () => {
+  const sample = {from:'10086', content:'[测试] 您的验证码是 831204，5分钟内有效，请勿泄露。'};
+  await fetch('/sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sample)});
+  showToast('已发一条测试短信');
+  setTimeout(refresh, 300);
+};
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

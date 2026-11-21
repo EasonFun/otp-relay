@@ -1,0 +1,14 @@
+# runtime data - never commit
+data/
+logs/
+*.old
+*.log
+
+# editor
+.vscode/
+.idea/
+*.swp
+
+# windows
+Thumbs.db
+desktop.ini

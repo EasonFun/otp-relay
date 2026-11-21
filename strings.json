@@ -1,0 +1,8 @@
+{
+  "appName": "验证码助手",
+  "toastTitle": "验证码",
+  "toastCopied": "已复制到剪贴板，Ctrl+V 粘贴",
+  "toastNoCode": "收到短信，但没识别出验证码",
+  "toastHotkey": "已复制最新验证码，正在粘贴",
+  "toastNoHistory": "还没有收到过验证码"
+}
